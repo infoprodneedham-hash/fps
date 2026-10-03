@@ -3,14 +3,2101 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FPS Game</title>
-    <link rel="stylesheet" href="styles.css">
+    <title>PROTO-SKYE: Tower Infiltration</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            margin: 0;
+            padding: 0;
+            -webkit-user-select: none;
+        }
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #030508;
+            font-family: 'Share Tech Mono', monospace;
+            color: #4ef2bb;
+        }
+
+        #game-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            background: #000;
+        }
+
+        canvas#webgl-canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+            image-rendering: pixelated;
+        }
+
+        /* CRT Scanline & PS1 Dither Effect Overlay */
+        .crt-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.45) 50%),
+                        linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+            background-size: 100% 3px, 6px 100%;
+            z-index: 20;
+            opacity: 0.85;
+        }
+
+        .crt-vignette {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            box-shadow: inset 0 0 120px rgba(0, 10, 20, 0.95);
+            z-index: 21;
+        }
+
+        /* Flash Screen for Camera */
+        #photo-flash {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #ffffff;
+            opacity: 0;
+            pointer-events: none;
+            z-index: 30;
+            transition: opacity 0.45s cubic-bezier(0.1, 0.9, 0.2, 1);
+        }
+
+        /* HUD Elements */
+        #hud {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 25;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 24px 30px;
+        }
+
+        .hud-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .sys-badge {
+            background: rgba(4, 24, 28, 0.82);
+            border: 1px solid #1ef0ab;
+            box-shadow: 0 0 12px rgba(30, 240, 171, 0.35);
+            padding: 8px 16px;
+            font-size: 13px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            border-radius: 4px;
+        }
+
+        .alert-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: rgba(6, 12, 18, 0.85);
+            border: 1px solid #23586b;
+            padding: 10px 24px;
+            border-radius: 4px;
+            min-width: 240px;
+        }
+
+        .alert-label {
+            font-size: 11px;
+            letter-spacing: 2px;
+            margin-bottom: 5px;
+            color: #8da4b3;
+        }
+
+        .alert-meter {
+            width: 100%;
+            height: 8px;
+            background: #0d1e28;
+            border: 1px solid #1f4255;
+            position: relative;
+            overflow: hidden;
+            border-radius: 2px;
+        }
+
+        .alert-fill {
+            height: 100%;
+            width: 0%;
+            background: #1ef0ab;
+            transition: width 0.15s ease, background-color 0.2s;
+        }
+
+        .alert-state-text {
+            margin-top: 5px;
+            font-size: 12px;
+            font-weight: bold;
+            color: #1ef0ab;
+            letter-spacing: 1.5px;
+        }
+
+        /* Objective Box */
+        .objective-box {
+            position: absolute;
+            top: 86px;
+            left: 30px;
+            background: rgba(3, 15, 20, 0.85);
+            border-left: 3px solid #1ef0ab;
+            padding: 12px 18px;
+            border-radius: 0 6px 6px 0;
+            max-width: 380px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+
+        .objective-title {
+            font-size: 10px;
+            color: #6db6a8;
+            letter-spacing: 1.5px;
+            margin-bottom: 4px;
+        }
+
+        .objective-text {
+            font-size: 14px;
+            color: #ffffff;
+            text-shadow: 0 0 5px rgba(255,255,255,0.4);
+            line-height: 1.3;
+        }
+
+        .objective-status {
+            display: inline-block;
+            margin-top: 6px;
+            font-size: 11px;
+            padding: 2px 6px;
+            border-radius: 2px;
+            background: rgba(255, 174, 0, 0.2);
+            color: #ffb700;
+            border: 1px solid #ffb700;
+        }
+
+        .objective-status.done {
+            background: rgba(30, 240, 171, 0.25);
+            color: #1ef0ab;
+            border-color: #1ef0ab;
+        }
+
+        /* Crosshair / Viewfinder */
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 26;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .crosshair-reticle {
+            width: 24px;
+            height: 24px;
+            position: relative;
+        }
+
+        .crosshair-reticle::before, .crosshair-reticle::after {
+            content: '';
+            position: absolute;
+            background: rgba(30, 240, 171, 0.85);
+        }
+
+        .crosshair-reticle::before {
+            top: 11px;
+            left: 0;
+            width: 24px;
+            height: 2px;
+        }
+
+        .crosshair-reticle::after {
+            left: 11px;
+            top: 0;
+            width: 2px;
+            height: 24px;
+        }
+
+        .crosshair-dot {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: #ffffff;
+            border-radius: 50%;
+        }
+
+        /* Dynamic Grapple Lock-on Target Indicator */
+        #grapple-target-indicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 42px;
+            height: 42px;
+            transform: translate(-50%, -50%);
+            border: 2px dashed #00e5ff;
+            border-radius: 50%;
+            pointer-events: none;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 0 14px rgba(0, 229, 255, 0.4);
+            transition: border-color 0.15s ease, transform 0.1s ease;
+            z-index: 26;
+        }
+
+        #grapple-target-indicator.locked {
+            border-color: #00ff88;
+            border-style: solid;
+            width: 48px;
+            height: 48px;
+            box-shadow: 0 0 22px rgba(0, 255, 136, 0.85);
+            animation: pulse-ring 0.8s infinite alternate;
+        }
+
+        @keyframes pulse-ring {
+            0% { transform: translate(-50%, -50%) scale(0.95); }
+            100% { transform: translate(-50%, -50%) scale(1.1); }
+        }
+
+        #grapple-dist-readout {
+            position: absolute;
+            bottom: -22px;
+            font-size: 11px;
+            letter-spacing: 1px;
+            font-weight: bold;
+            color: #00ff88;
+            text-shadow: 0 0 6px #000;
+            white-space: nowrap;
+        }
+
+        /* Camera Frame when Tool 1 is active */
+        #camera-frame {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 24;
+            display: none;
+        }
+
+        .camera-corner {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            border-color: #1ef0ab;
+            border-style: solid;
+        }
+        .c-tl { top: 40px; left: 40px; border-width: 3px 0 0 3px; }
+        .c-tr { top: 40px; right: 40px; border-width: 3px 3px 0 0; }
+        .c-bl { bottom: 40px; left: 40px; border-width: 0 0 3px 3px; }
+        .c-br { bottom: 40px; right: 40px; border-width: 0 3px 3px 0; }
+
+        .cam-info {
+            position: absolute;
+            top: 55px;
+            left: 115px;
+            font-size: 13px;
+            color: #1ef0ab;
+            letter-spacing: 2px;
+            background: rgba(0,0,0,0.6);
+            padding: 4px 10px;
+            border: 1px solid rgba(30,240,171,0.4);
+        }
+
+        /* Tools Bottom Bar */
+        .hud-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+        }
+
+        .tool-bar {
+            display: flex;
+            gap: 12px;
+        }
+
+        .tool-slot {
+            background: rgba(4, 18, 24, 0.85);
+            border: 1px solid #1a4f5c;
+            padding: 10px 16px;
+            border-radius: 4px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 110px;
+            transition: all 0.2s ease;
+        }
+
+        .tool-slot.active {
+            border-color: #1ef0ab;
+            background: rgba(14, 52, 54, 0.9);
+            box-shadow: 0 0 15px rgba(30, 240, 171, 0.4);
+            transform: translateY(-4px);
+        }
+
+        .tool-key {
+            font-size: 10px;
+            color: #799ea7;
+            margin-bottom: 2px;
+        }
+
+        .tool-name {
+            font-size: 12px;
+            font-weight: bold;
+            color: #fff;
+            letter-spacing: 1px;
+        }
+
+        .tool-ammo {
+            font-size: 11px;
+            color: #1ef0ab;
+            margin-top: 4px;
+        }
+
+        /* Notifications & Log */
+        #notification-box {
+            position: absolute;
+            top: 25%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(5, 20, 28, 0.95);
+            border: 2px solid #1ef0ab;
+            padding: 18px 36px;
+            text-align: center;
+            border-radius: 6px;
+            box-shadow: 0 0 35px rgba(30,240,171,0.5);
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.25s ease, transform 0.25s ease;
+            z-index: 40;
+        }
+
+        #notification-box.visible {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1.05);
+        }
+
+        #notification-title {
+            font-size: 18px;
+            font-weight: bold;
+            letter-spacing: 2px;
+            color: #fff;
+            margin-bottom: 6px;
+        }
+
+        #notification-desc {
+            font-size: 13px;
+            color: #1ef0ab;
+        }
+
+        /* Overlay Start / Pause / Victory Screen */
+        .modal-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(2, 6, 10, 0.94);
+            z-index: 50;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .modal-screen.hidden {
+            display: none;
+        }
+
+        .glitch-title {
+            font-family: 'VT323', monospace;
+            font-size: 72px;
+            color: #1ef0ab;
+            text-shadow: 3px 3px #ff0055, -2px -2px #00aaff;
+            letter-spacing: 4px;
+            margin-bottom: 10px;
+        }
+
+        .modal-tagline {
+            font-size: 16px;
+            color: #92b8c2;
+            letter-spacing: 3px;
+            margin-bottom: 25px;
+            max-width: 600px;
+            line-height: 1.5;
+        }
+
+        .briefing-box {
+            background: rgba(10, 30, 38, 0.6);
+            border: 1px solid #1a5665;
+            padding: 16px 28px;
+            border-radius: 6px;
+            max-width: 650px;
+            text-align: left;
+            margin-bottom: 28px;
+            font-size: 13px;
+            color: #c9e4ea;
+            line-height: 1.6;
+        }
+
+        .briefing-box h3 {
+            color: #1ef0ab;
+            margin-bottom: 8px;
+            font-size: 15px;
+        }
+
+        .control-grid {
+            display: grid;
+            grid-template-columns: auto auto;
+            gap: 6px 20px;
+            margin-top: 10px;
+            font-size: 12px;
+        }
+
+        .control-key {
+            color: #ffcb36;
+            font-weight: bold;
+        }
+
+        .btn-action {
+            background: #1ef0ab;
+            color: #031518;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 18px;
+            font-weight: bold;
+            padding: 14px 44px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            box-shadow: 0 0 25px rgba(30, 240, 171, 0.6);
+            transition: all 0.2s ease;
+            letter-spacing: 2px;
+        }
+
+        .btn-action:hover {
+            background: #ffffff;
+            box-shadow: 0 0 35px rgba(255, 255, 255, 0.9);
+            transform: scale(1.04);
+        }
+
+        /* Parachute Jump Cinematic Overlay */
+        #parachute-hud {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 28;
+            display: none;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            padding: 40px;
+        }
+
+        .altimeter {
+            font-size: 32px;
+            font-weight: bold;
+            color: #ffcc00;
+            background: rgba(0,0,0,0.7);
+            padding: 10px 24px;
+            border: 2px solid #ffcc00;
+            border-radius: 4px;
+        }
+
+        /* Interact Prompt */
+        #interact-prompt {
+            position: absolute;
+            top: 58%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 14px;
+            color: #ffffff;
+            background: rgba(0, 0, 0, 0.75);
+            border: 1px solid #1ef0ab;
+            padding: 6px 14px;
+            border-radius: 4px;
+            display: none;
+            pointer-events: none;
+            z-index: 27;
+            letter-spacing: 1px;
+        }
+    </style>
 </head>
 <body>
-    <div class="game-container">
-        <canvas id="gameCanvas"></canvas>
+    <div id="game-container">
+        <canvas id="webgl-canvas"></canvas>
+        <div class="crt-overlay"></div>
+        <div class="crt-vignette"></div>
+        <div id="photo-flash"></div>
+
+        <!-- Camera Viewfinder -->
+        <div id="camera-frame">
+            <div class="camera-corner c-tl"></div>
+            <div class="camera-corner c-tr"></div>
+            <div class="camera-corner c-bl"></div>
+            <div class="camera-corner c-br"></div>
+            <div class="cam-info">REC [AI-OPTICAL 4.0X] // SHUTTER [L-CLICK]</div>
+        </div>
+
+        <div id="crosshair">
+            <div class="crosshair-reticle"></div>
+            <div class="crosshair-dot"></div>
+        </div>
+
+        <!-- Grapple Smart Reticle Overlay -->
+        <div id="grapple-target-indicator">
+            <div id="grapple-dist-readout">ANCHOR: READY</div>
+        </div>
+
+        <div id="interact-prompt">[E] ENTER ELEVATOR TO NEXT FLOOR</div>
+
+        <!-- HUD Layer -->
+        <div id="hud">
+            <div class="hud-header">
+                <div>
+                    <div class="sys-badge" id="floor-display">FLOOR 01 : GROUND LOBBY</div>
+                    <div style="font-size: 11px; margin-top: 4px; color:#5b8e8f;">UNIT: PROTO-SKYE v3.4 // CHASSIS: OK</div>
+                </div>
+
+                <div class="alert-container">
+                    <span class="alert-label">STEALTH DETECTION MATRIX</span>
+                    <div class="alert-meter">
+                        <div class="alert-fill" id="alert-fill"></div>
+                    </div>
+                    <span class="alert-state-text" id="alert-text">UNDETECTED</span>
+                </div>
+
+                <div class="sys-badge" style="border-color: #3b9ac4; color: #72dbff;" id="guard-status-display">
+                    GUARD: ACTIVE PATROL
+                </div>
+            </div>
+
+            <div class="objective-box">
+                <div class="objective-title">PRIMARY COVERT OBJECTIVE</div>
+                <div class="objective-text" id="objective-desc">Photograph the Classified Security Manifest on the reception desk.</div>
+                <div class="objective-status" id="objective-tag">STATUS: PENDING</div>
+            </div>
+
+            <div class="hud-footer">
+                <div class="tool-bar">
+                    <div class="tool-slot active" id="slot-1" onclick="selectWeapon(0)">
+                        <span class="tool-key">[1]</span>
+                        <span class="tool-name">CYBER-CAM</span>
+                        <span class="tool-ammo">OPTICAL INFRA</span>
+                    </div>
+                    <div class="tool-slot" id="slot-2" onclick="selectWeapon(1)">
+                        <span class="tool-key">[2]</span>
+                        <span class="tool-name">GRAPPLE HOOK</span>
+                        <span class="tool-ammo" id="grapple-status">READY</span>
+                    </div>
+                    <div class="tool-slot" id="slot-3" onclick="selectWeapon(2)">
+                        <span class="tool-key">[3]</span>
+                        <span class="tool-name">GAS PISTOL</span>
+                        <span class="tool-ammo" id="gas-ammo-display">PELLETS: 6</span>
+                    </div>
+                </div>
+
+                <div style="text-align: right; background: rgba(3,15,20,0.85); padding: 8px 16px; border-radius: 4px; border: 1px solid #1b4f5d;">
+                    <div style="font-size: 11px; color:#8ab1b7;">ELEVATOR ACCESS</div>
+                    <div style="font-size: 13px; font-weight: bold; color:#1ef0ab;" id="exit-status">LOCKED - SECURE OBJECTIVE</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Parachute HUD (Floor 5 Finale) -->
+        <div id="parachute-hud">
+            <div style="font-size: 26px; color:#fff; text-shadow: 0 0 10px #00ffff; font-weight:bold;">
+                AIRBORNE BASE JUMP IN PROGRESS
+            </div>
+            <div class="altimeter" id="altimeter-val">ALT: 320 M</div>
+            <div style="font-size: 16px; color:#1ef0ab;">PARACHUTE DEPLOYED — GLIDING TO EXTRACTION ZONE</div>
+        </div>
+
+        <!-- Notification Banner -->
+        <div id="notification-box">
+            <div id="notification-title">OBJECTIVE COMPLETED</div>
+            <div id="notification-desc">Manifest photo validated. Elevator clearance granted.</div>
+        </div>
+
+        <!-- Start / Title Screen -->
+        <div class="modal-screen" id="start-screen">
+            <h1 class="glitch-title">PROTO-SKYE</h1>
+            <div class="modal-tagline">TOWER INFILTRATION // PS1 RETRO STEALTH PROTOCOL</div>
+            
+            <div class="briefing-box">
+                <h3>OPERATIONAL BRIEFING:</h3>
+                <p>You are <strong>PROTO-SKYE</strong>, an advanced humanoid android operative. Infiltrate the 5-story megacorp headquarters, ascend from the ground lobby to the rooftop, complete each floor's covert intelligence mission, neutralize cyber-guards with gas pellets, use your grapple crossbow for vertical traversal, and base-jump to escape into the night.</p>
+                <div class="control-grid">
+                    <div><span class="control-key">W, A, S, D</span> : Walk / Strafe</div>
+                    <div><span class="control-key">Mouse Look</span> : Aim & Turn (Click to Lock)</div>
+                    <div><span class="control-key">Left Mouse Button</span> : Use Active Tool / Shutter / Fire</div>
+                    <div><span class="control-key">Right Mouse Button</span> : Camera Zoom In</div>
+                    <div><span class="control-key">1, 2, 3 / Wheel</span> : Select Camera / Grapple / Gas Gun</div>
+                    <div><span class="control-key">Space</span> : Jump / Ascend</div>
+                    <div><span class="control-key">Shift</span> : Sprint / Accelerate</div>
+                    <div><span class="control-key">E</span> : Interact with Elevator / Safe</div>
+                </div>
+            </div>
+
+            <button class="btn-action" id="btn-start">INITIALIZE INFILTRATION</button>
+        </div>
+
+        <!-- Mission Victory Screen -->
+        <div class="modal-screen hidden" id="victory-screen">
+            <h1 class="glitch-title" style="color: #4ef2bb;">MISSION ACCOMPLISHED</h1>
+            <div class="modal-tagline">BASE JUMP EXTRACTION SUCCESSFUL — TARGET DATA EXFILTRATED</div>
+            <div class="briefing-box" style="text-align: center;">
+                <p style="font-size: 16px; margin-bottom: 12px; color:#fff;">All intel photographed without lethal collateral.</p>
+                <p style="color: #1ef0ab;">Floors Cleared: 5 / 5 &nbsp;|&nbsp; Target Captured: 100% &nbsp;|&nbsp; Operative Status: RETRIEVED</p>
+            </div>
+            <button class="btn-action" id="btn-restart">REPLAY MISSION</button>
+        </div>
     </div>
 
-    <script src="scripts.js"></script>
+    <script>
+        class RetroAudioEngine {
+            constructor() {
+                this.ctx = null;
+                this.initialized = false;
+            }
+
+            init() {
+                if (this.initialized) return;
+                try {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    this.ctx = new AudioContext();
+                    this.initialized = true;
+                    this.playAmbience();
+                } catch(e) {
+                    console.warn("Web Audio not supported", e);
+                }
+            }
+
+            playShutter() {
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                // Click 1
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(1400, now);
+                osc.frequency.exponentialRampToValueAtTime(300, now + 0.04);
+                gain.gain.setValueAtTime(0.4, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(now);
+                osc.stop(now + 0.05);
+
+                // Whir
+                const whir = this.ctx.createOscillator();
+                const whirGain = this.ctx.createGain();
+                whir.type = 'sine';
+                whir.frequency.setValueAtTime(400, now + 0.08);
+                whir.frequency.linearRampToValueAtTime(800, now + 0.22);
+                whirGain.gain.setValueAtTime(0.15, now + 0.08);
+                whirGain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+                whir.connect(whirGain);
+                whirGain.connect(this.ctx.destination);
+                whir.start(now + 0.08);
+                whir.stop(now + 0.25);
+            }
+
+            playPelletFire() {
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                // Pop sound
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(320, now);
+                osc.frequency.exponentialRampToValueAtTime(60, now + 0.08);
+                gain.gain.setValueAtTime(0.35, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(now);
+                osc.stop(now + 0.09);
+            }
+
+            playGasExplosion() {
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                // Noise buffer hiss
+                const bufferSize = this.ctx.sampleRate * 1.2;
+                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const output = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    output[i] = (Math.random() * 2 - 1) * Math.exp(-i / (this.ctx.sampleRate * 0.35));
+                }
+                const whiteNoise = this.ctx.createBufferSource();
+                whiteNoise.buffer = buffer;
+
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'bandpass';
+                filter.frequency.setValueAtTime(850, now);
+                filter.Q.setValueAtTime(2.0, now);
+
+                const gain = this.ctx.createGain();
+                gain.gain.setValueAtTime(0.4, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 1.1);
+
+                whiteNoise.connect(filter);
+                filter.connect(gain);
+                gain.connect(this.ctx.destination);
+                whiteNoise.start(now);
+            }
+
+            playGrappleFire() {
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(700, now);
+                osc.frequency.exponentialRampToValueAtTime(200, now + 0.15);
+                gain.gain.setValueAtTime(0.25, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(now);
+                osc.stop(now + 0.18);
+            }
+
+            playGrappleReel() {
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(250, now);
+                osc.frequency.linearRampToValueAtTime(650, now + 0.5);
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(now);
+                osc.stop(now + 0.6);
+            }
+
+            playAlert() {
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(880, now);
+                osc.frequency.setValueAtTime(660, now + 0.12);
+                gain.gain.setValueAtTime(0.3, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(now);
+                osc.stop(now + 0.3);
+            }
+
+            playElevatorDing() {
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(880, now);
+                gain.gain.setValueAtTime(0.4, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(now);
+                osc.stop(now + 1.2);
+            }
+
+            playAmbience() {
+                if (!this.ctx) return;
+                // Deep low frequency sci-fi drone
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(55, this.ctx.currentTime); // A1 note
+                gain.gain.setValueAtTime(0.04, this.ctx.currentTime);
+
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(140, this.ctx.currentTime);
+
+                osc.connect(filter);
+                filter.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+            }
+        }
+
+        const audio = new RetroAudioEngine();
+
+        const FLOOR_DATA = [
+            {
+                floorNumber: 1,
+                name: "FLOOR 01 : GROUND LOBBY",
+                ambientColor: 0x0a1c24,
+                lightColor: 0x2af2b0,
+                objective: "Photograph the Classified Security Manifest on the reception desk.",
+                targetName: "Classified Manifest",
+                targetPos: new THREE.Vector3(0, 1.2, -6),
+                targetSize: 1.4,
+                guardStart: new THREE.Vector3(8, 0, -6),
+                guardPatrol: [new THREE.Vector3(8, 0, -6), new THREE.Vector3(-8, 0, -6), new THREE.Vector3(-8, 0, 4), new THREE.Vector3(8, 0, 4)],
+                elevatorPos: new THREE.Vector3(0, 0, 15)
+            },
+            {
+                floorNumber: 2,
+                name: "FLOOR 02 : OPEN OFFICE & SERVERS",
+                ambientColor: 0x081524,
+                lightColor: 0x36a9e1,
+                objective: "Photograph the Rogue Executive Target walking near the server racks.",
+                targetName: "Rogue Executive Target",
+                targetPos: null, // Dynamic: target is the executive guard himself!
+                targetSize: 2.2,
+                guardStart: new THREE.Vector3(6, 0, -8),
+                guardPatrol: [new THREE.Vector3(6, 0, -8), new THREE.Vector3(6, 0, 8), new THREE.Vector3(-6, 0, 8), new THREE.Vector3(-6, 0, -8)],
+                elevatorPos: new THREE.Vector3(0, 0, 15)
+            },
+            {
+                floorNumber: 3,
+                name: "FLOOR 03 : R&D HIGH CATWALK LAB",
+                ambientColor: 0x140a24,
+                lightColor: 0xbf36e1,
+                objective: "Use Grapple Hook to reach the upper catwalk safe and photograph the Cybernetic Schematics.",
+                targetName: "Cybernetic Schematics",
+                targetPos: new THREE.Vector3(0, 6.2, -9), // On high balcony!
+                targetSize: 1.8,
+                guardStart: new THREE.Vector3(0, 0, 0),
+                guardPatrol: [new THREE.Vector3(-10, 0, 0), new THREE.Vector3(10, 0, 0)],
+                elevatorPos: new THREE.Vector3(0, 0, 15)
+            },
+            {
+                floorNumber: 4,
+                name: "FLOOR 04 : EXECUTIVE PENTHOUSE",
+                ambientColor: 0x221308,
+                lightColor: 0xf5a442,
+                objective: "Locate the Penthouse Core Terminal and photograph the Master AI Core drive.",
+                targetName: "Master AI Core Drive",
+                targetPos: new THREE.Vector3(7, 1.4, -7),
+                targetSize: 1.6,
+                guardStart: new THREE.Vector3(-6, 0, -2),
+                guardPatrol: [new THREE.Vector3(-7, 0, -2), new THREE.Vector3(0, 0, 7), new THREE.Vector3(7, 0, -2)],
+                elevatorPos: new THREE.Vector3(0, 0, 15)
+            },
+            {
+                floorNumber: 5,
+                name: "FLOOR 05 : ROOFTOP HELIPAD & LAUNCH LEDGE",
+                ambientColor: 0x050d18,
+                lightColor: 0x36e1b8,
+                objective: "Sprint to the rooftop runway ledge and base jump into the city night to escape!",
+                targetName: "Extraction Ledge",
+                targetPos: new THREE.Vector3(0, 1.5, -25),
+                targetSize: 3.5,
+                guardStart: new THREE.Vector3(-8, 0, -10),
+                guardPatrol: [new THREE.Vector3(-8, 0, -10), new THREE.Vector3(8, 0, -10)],
+                elevatorPos: null
+            }
+        ];
+
+        let scene, camera, renderer;
+        let currentFloorIndex = 0;
+        let activeWeapon = 0; // 0: Camera, 1: Grapple, 2: Gas Gun
+        let objectiveCompleted = false;
+        let isGameStarted = false;
+        let isBaseJumping = false;
+        let altitude = 380;
+
+        // Player physics & navigation
+        const player = {
+            pos: new THREE.Vector3(0, 1.6, 12),
+            vel: new THREE.Vector3(),
+            speed: 7.5,
+            sprintMultiplier: 1.5,
+            height: 1.6,
+            onGround: true,
+            pitch: 0,
+            yaw: 0,
+            grappling: false,
+            grapplePoint: null
+        };
+
+        const keys = { w: false, a: false, s: false, d: false, space: false, shift: false };
+        let mouseLookActive = false;
+        let gasPellets = 6;
+        let alertLevel = 0; // 0 to 100
+
+        // Scene objects
+        let floorColliders = [];
+        let interactables = [];
+        let currentGuard = null;
+        let missionTargetMesh = null;
+        let elevatorDoorMesh = null;
+        let viewmodelArm = null;
+        let gasProjectiles = [];
+        let smokeParticles = [];
+        let grappleRopeMesh = null;
+        let grappleLine = null;
+        let grappleTargetHit = null;
+
+        function initEngine() {
+            const canvas = document.getElementById('webgl-canvas');
+            renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: false, powerPreference: 'high-performance' });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.25)); // Slightly crunchy retro PS1 render scale
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.BasicShadowMap; // Low-poly crisp shadows
+
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x040810, 0.022);
+
+            camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.1, 500);
+            camera.rotation.order = 'YXZ';
+
+            // Create visible 3D Grapple Cable Line
+            const lineGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+            const lineMat = new THREE.LineBasicMaterial({ color: 0x4ef2bb, linewidth: 2 });
+            grappleLine = new THREE.Line(lineGeo, lineMat);
+            grappleLine.visible = false;
+            scene.add(grappleLine);
+
+            setupInputs();
+            setupViewModel();
+            loadFloor(0);
+
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function setupViewModel() {
+            viewmodelArm = new THREE.Group();
+
+            // Robotic arm material: gunmetal grey & teal illuminated joints
+            const metalMat = new THREE.MeshLambertMaterial({ color: 0x3a444c, flatShading: true });
+            const jointMat = new THREE.MeshBasicMaterial({ color: 0x1ef0ab });
+            const accentMat = new THREE.MeshLambertMaterial({ color: 0x18242a, flatShading: true });
+
+            // Forearm
+            const forearmGeo = new THREE.BoxGeometry(0.12, 0.14, 0.6);
+            const forearm = new THREE.Mesh(forearmGeo, metalMat);
+            forearm.position.set(0.28, -0.25, -0.45);
+            viewmodelArm.add(forearm);
+
+            // Wrist joint
+            const wristGeo = new THREE.CylinderGeometry(0.07, 0.07, 0.15, 8);
+            const wrist = new THREE.Mesh(wristGeo, jointMat);
+            wrist.rotation.z = Math.PI / 2;
+            wrist.position.set(0.28, -0.25, -0.72);
+            viewmodelArm.add(wrist);
+
+            // Gadget 0: Cyber Camera lens attachment
+            const camTool = new THREE.Group();
+            camTool.name = "tool_cam";
+            const camBody = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.18, 0.25), accentMat);
+            const camLens = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.15, 8), jointMat);
+            camLens.rotation.x = Math.PI / 2;
+            camLens.position.set(0, 0, -0.15);
+            camTool.add(camBody, camLens);
+            camTool.position.set(0.25, -0.18, -0.85);
+            viewmodelArm.add(camTool);
+
+            // Gadget 1: Crossbow Grapple Hook
+            const grappleTool = new THREE.Group();
+            grappleTool.name = "tool_grapple";
+            const grappleBody = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.12, 0.5), metalMat);
+            const grappleBowLeft = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.04, 0.05), jointMat);
+            grappleBowLeft.position.set(-0.15, 0.04, -0.2);
+            grappleBowLeft.rotation.y = 0.4;
+            const grappleBowRight = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.04, 0.05), jointMat);
+            grappleBowRight.position.set(0.15, 0.04, -0.2);
+            grappleBowRight.rotation.y = -0.4;
+            const hookTip = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.12, 4), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+            hookTip.rotation.x = -Math.PI / 2;
+            hookTip.position.set(0, 0, -0.32);
+            grappleTool.add(grappleBody, grappleBowLeft, grappleBowRight, hookTip);
+            grappleTool.position.set(0.25, -0.18, -0.85);
+            grappleTool.visible = false;
+            viewmodelArm.add(grappleTool);
+
+            // Gadget 2: Gas Pellet Pistol
+            const pistolTool = new THREE.Group();
+            pistolTool.name = "tool_pistol";
+            const pistolBody = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.16, 0.35), metalMat);
+            const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.3, 6), accentMat);
+            barrel.rotation.x = Math.PI / 2;
+            barrel.position.set(0, 0.04, -0.2);
+            const canister = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.18, 6), new THREE.MeshBasicMaterial({ color: 0x4eff6a }));
+            canister.position.set(0, -0.1, -0.05);
+            pistolTool.add(pistolBody, barrel, canister);
+            pistolTool.position.set(0.25, -0.18, -0.85);
+            pistolTool.visible = false;
+            viewmodelArm.add(pistolTool);
+
+            camera.add(viewmodelArm);
+            scene.add(camera);
+        }
+
+        function loadFloor(index) {
+            currentFloorIndex = index;
+            objectiveCompleted = false;
+            player.pos.set(0, 1.6, 12);
+            player.vel.set(0, 0, 0);
+            player.grappling = false;
+            player.grapplePoint = null;
+            alertLevel = 0;
+            updateAlertUI();
+
+            const data = FLOOR_DATA[index];
+
+            // Clear previous floor elements
+            while (scene.children.length > 0) {
+                const obj = scene.children[0];
+                if (obj === camera) {
+                    scene.remove(camera);
+                } else {
+                    scene.remove(obj);
+                }
+            }
+            scene.add(camera);
+            floorColliders = [];
+            interactables = [];
+            gasProjectiles = [];
+            smokeParticles = [];
+
+            // UI updates
+            document.getElementById('floor-display').innerText = data.name;
+            document.getElementById('objective-desc').innerText = data.objective;
+            const objTag = document.getElementById('objective-tag');
+            objTag.innerText = "STATUS: PENDING";
+            objTag.className = "objective-status";
+            document.getElementById('exit-status').innerText = index === 4 ? "LEAP TO ESCAPE" : "LOCKED - SECURE OBJECTIVE";
+            document.getElementById('exit-status').style.color = "#ffb700";
+
+            // Ambient & Directional Retro Lighting
+            scene.background = new THREE.Color(data.ambientColor);
+            scene.fog.color = new THREE.Color(data.ambientColor);
+
+            const hemiLight = new THREE.HemisphereLight(data.lightColor, 0x050d14, 0.7);
+            scene.add(hemiLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
+            dirLight.position.set(10, 25, 10);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 1024;
+            dirLight.shadow.mapSize.height = 1024;
+            scene.add(dirLight);
+
+            // Skyscraper Core Shell: Floor, Ceiling, Outer Walls with City Windows
+            createArchitecture(index, data);
+
+            // Mission Target Setup
+            createMissionTarget(index, data);
+
+            // Patrolling Guard Creation
+            createGuard(index, data);
+
+            audio.playElevatorDing();
+            showNotification(data.name, "INFILTRATION PHASE ACTIVE");
+        }
+
+        function createArchitecture(index, data) {
+            const floorWidth = 26;
+            const floorLength = 34;
+            const floorHeight = (index === 2) ? 8 : 4.5; // Floor 3 has high ceiling catwalk!
+
+            const wallMat = new THREE.MeshLambertMaterial({ color: 0x1b2834, flatShading: true });
+            const floorMat = new THREE.MeshLambertMaterial({ color: 0x0d151e, flatShading: true });
+            const ceilingMat = new THREE.MeshLambertMaterial({ color: 0x101b24, flatShading: true });
+            const neonMat = new THREE.MeshBasicMaterial({ color: data.lightColor });
+            const glassMat = new THREE.MeshBasicMaterial({ color: 0x16344d, transparent: true, opacity: 0.6 });
+
+            // Main Floor
+            const floorMesh = new THREE.Mesh(new THREE.BoxGeometry(floorWidth, 0.4, floorLength), floorMat);
+            floorMesh.position.y = -0.2;
+            floorMesh.receiveShadow = true;
+            scene.add(floorMesh);
+            floorColliders.push(floorMesh);
+
+            // Ceiling (except on rooftop)
+            if (index < 4) {
+                const ceilMesh = new THREE.Mesh(new THREE.BoxGeometry(floorWidth, 0.4, floorLength), ceilingMat);
+                ceilMesh.position.y = floorHeight;
+                scene.add(ceilMesh);
+            }
+
+            // Window wall looking out onto low-poly rain metropolis
+            const windowWall = new THREE.Mesh(new THREE.BoxGeometry(floorWidth, floorHeight, 0.4), glassMat);
+            windowWall.position.set(0, floorHeight / 2, -floorLength / 2);
+            scene.add(windowWall);
+            floorColliders.push(windowWall);
+
+            // Outer side walls
+            const wallLeft = new THREE.Mesh(new THREE.BoxGeometry(0.4, floorHeight, floorLength), wallMat);
+            wallLeft.position.set(-floorWidth / 2, floorHeight / 2, 0);
+            scene.add(wallLeft);
+            floorColliders.push(wallLeft);
+
+            const wallRight = new THREE.Mesh(new THREE.BoxGeometry(0.4, floorHeight, floorLength), wallMat);
+            wallRight.position.set(floorWidth / 2, floorHeight / 2, 0);
+            scene.add(wallRight);
+            floorColliders.push(wallRight);
+
+            // Back wall
+            const wallBack = new THREE.Mesh(new THREE.BoxGeometry(floorWidth, floorHeight, 0.4), wallMat);
+            wallBack.position.set(0, floorHeight / 2, floorLength / 2);
+            scene.add(wallBack);
+            floorColliders.push(wallBack);
+
+            // Distant Low-Poly Cyber Cityscape outside windows
+            createCityBackground();
+
+            // Floor-specific interior props
+            if (index === 0) {
+                // Ground Floor Lobby: Reception Desk, Pillars, Waiting Couches
+                createPillar(-6, 0);
+                createPillar(6, 0);
+                // Security Desk
+                const desk = new THREE.Mesh(new THREE.BoxGeometry(6, 1.1, 2), wallMat);
+                desk.position.set(0, 0.55, -6);
+                scene.add(desk);
+                floorColliders.push(desk);
+            } else if (index === 1) {
+                // Open Office: Cubicles and glowing server banks
+                for (let x = -8; x <= 8; x += 8) {
+                    for (let z = -6; z <= 6; z += 6) {
+                        if (x === 0 && z === 0) continue;
+                        const desk = new THREE.Mesh(new THREE.BoxGeometry(3.5, 1.0, 1.8), wallMat);
+                        desk.position.set(x, 0.5, z);
+                        scene.add(desk);
+                        floorColliders.push(desk);
+
+                        const mon = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.6, 0.1), neonMat);
+                        mon.position.set(x, 1.3, z - 0.2);
+                        scene.add(mon);
+                    }
+                }
+            } else if (index === 2) {
+                // Catwalk & Lab: High metallic catwalk accessible via Grapple Gun!
+                const catwalkMat = new THREE.MeshLambertMaterial({ color: 0x1d3648, flatShading: true });
+                const catwalk = new THREE.Mesh(new THREE.BoxGeometry(22, 0.4, 7), catwalkMat);
+                catwalk.position.set(0, 5.0, -9);
+                scene.add(catwalk);
+                floorColliders.push(catwalk);
+
+                // Catwalk safety railing (grapple-able)
+                const railMat = new THREE.MeshLambertMaterial({ color: 0x367c9c, flatShading: true });
+                const railFront = new THREE.Mesh(new THREE.BoxGeometry(22, 0.9, 0.2), railMat);
+                railFront.position.set(0, 5.65, -5.6);
+                scene.add(railFront);
+                floorColliders.push(railFront);
+
+                // Prominent glowing Yellow/Cyan Grapple Anchor Beacons with target colliders
+                const createAnchorBeacon = (x, y, z, label) => {
+                    const beaconGroup = new THREE.Group();
+                    beaconGroup.position.set(x, y, z);
+
+                    // Outer glowing spinning ring
+                    const ringGeo = new THREE.TorusGeometry(0.85, 0.12, 6, 12);
+                    const ringMat = new THREE.MeshBasicMaterial({ color: 0x00ffcc });
+                    const ring = new THREE.Mesh(ringGeo, ringMat);
+                    ring.rotation.x = Math.PI / 4;
+                    beaconGroup.add(ring);
+
+                    // Central beacon diamond core
+                    const coreGeo = new THREE.OctahedronGeometry(0.45);
+                    const coreMat = new THREE.MeshBasicMaterial({ color: 0xffea00 });
+                    const core = new THREE.Mesh(coreGeo, coreMat);
+                    beaconGroup.add(core);
+
+                    // Mounting bracket
+                    const mountGeo = new THREE.CylinderGeometry(0.1, 0.1, 1.2, 6);
+                    const mountMat = new THREE.MeshLambertMaterial({ color: 0x274357 });
+                    const mount = new THREE.Mesh(mountGeo, mountMat);
+                    mount.position.y = -0.7;
+                    beaconGroup.add(mount);
+
+                    // Invisible generous grapple collision hitbox
+                    const hitBox = new THREE.Mesh(new THREE.BoxGeometry(2.4, 2.4, 2.4), new THREE.MeshBasicMaterial({ visible: false }));
+                    hitBox.isGrappleAnchor = true;
+                    hitBox.grappleLanding = new THREE.Vector3(x, 6.7, -9); // Safe landing point on upper deck
+                    beaconGroup.add(hitBox);
+                    floorColliders.push(hitBox);
+
+                    scene.add(beaconGroup);
+                };
+
+                // Add 3 high-visibility grapple anchor pylons along the catwalk deck
+                createAnchorBeacon(-7, 6.0, -6.5, "ANCHOR_L");
+                createAnchorBeacon(0, 6.0, -6.5, "ANCHOR_C");
+                createAnchorBeacon(7, 6.0, -6.5, "ANCHOR_R");
+
+                // Catwalk Support Pillars
+                createPillar(-8, -9, 5.0);
+                createPillar(8, -9, 5.0);
+
+                // Parkour / Alternate Jump Route: Stepped server crates and power units
+                const crateMat = new THREE.MeshLambertMaterial({ color: 0x223c4a, flatShading: true });
+                const step1 = new THREE.Mesh(new THREE.BoxGeometry(3, 1.5, 3), crateMat);
+                step1.position.set(-10, 0.75, 2);
+                scene.add(step1);
+                floorColliders.push(step1);
+
+                const step2 = new THREE.Mesh(new THREE.BoxGeometry(3, 3.0, 3), crateMat);
+                step2.position.set(-10, 1.5, -2);
+                scene.add(step2);
+                floorColliders.push(step2);
+
+                const step3 = new THREE.Mesh(new THREE.BoxGeometry(3, 4.4, 3), crateMat);
+                step3.position.set(-10, 2.2, -6);
+                scene.add(step3);
+                floorColliders.push(step3);
+            } else if (index === 3) {
+                // Penthouse: Glass display safe containing Master AI Core
+                const glassSafe = new THREE.Mesh(new THREE.BoxGeometry(2.5, 2.5, 2.5), new THREE.MeshBasicMaterial({ color: 0x4effdd, wireframe: true }));
+                glassSafe.position.set(7, 1.25, -7);
+                scene.add(glassSafe);
+                floorColliders.push(glassSafe);
+            } else if (index === 4) {
+                // Rooftop Helipad: Launch ramp for BASE JUMP
+                const helipadRing = new THREE.Mesh(new THREE.RingGeometry(4, 4.4, 16), neonMat);
+                helipadRing.rotation.x = -Math.PI / 2;
+                helipadRing.position.set(0, 0.02, 0);
+                scene.add(helipadRing);
+
+                // Jump platform ramp at edge
+                const ramp = new THREE.Mesh(new THREE.BoxGeometry(6, 0.5, 8), new THREE.MeshLambertMaterial({ color: 0x223640 }));
+                ramp.position.set(0, 0.25, -17);
+                scene.add(ramp);
+                floorColliders.push(ramp);
+
+                const signMat = new THREE.MeshBasicMaterial({ color: 0xff4444 });
+                const baseSign = new THREE.Mesh(new THREE.BoxGeometry(4, 0.8, 0.1), signMat);
+                baseSign.position.set(0, 1.5, -20.8);
+                scene.add(baseSign);
+            }
+
+            // Elevator Gate (Floors 0 to 3)
+            if (index < 4) {
+                const elevFrame = new THREE.Mesh(new THREE.BoxGeometry(3.6, 3.2, 0.4), new THREE.MeshLambertMaterial({ color: 0x142028 }));
+                elevFrame.position.set(0, 1.6, 16.5);
+                scene.add(elevFrame);
+
+                elevatorDoorMesh = new THREE.Mesh(new THREE.BoxGeometry(2.6, 2.8, 0.2), new THREE.MeshBasicMaterial({ color: 0x1ef0ab }));
+                elevatorDoorMesh.position.set(0, 1.4, 16.4);
+                scene.add(elevatorDoorMesh);
+            }
+        }
+
+        function createCityBackground() {
+            const cityGroup = new THREE.Group();
+            const bldgMat = new THREE.MeshLambertMaterial({ color: 0x050b12, flatShading: true });
+            const windowMat = new THREE.MeshBasicMaterial({ color: 0x20556b });
+
+            for (let i = 0; i < 40; i++) {
+                const h = 40 + Math.random() * 120;
+                const w = 12 + Math.random() * 18;
+                const bldg = new THREE.Mesh(new THREE.BoxGeometry(w, h, w), bldgMat);
+                const angle = Math.random() * Math.PI * 2;
+                const radius = 60 + Math.random() * 90;
+                bldg.position.set(Math.cos(angle) * radius, h / 2 - 40, Math.sin(angle) * radius);
+                cityGroup.add(bldg);
+
+                // Neon roof beacons
+                if (Math.random() > 0.4) {
+                    const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.8, 4, 4), new THREE.MeshBasicMaterial({ color: Math.random() > 0.5 ? 0xff2255 : 0x00ffff }));
+                    beacon.position.set(bldg.position.x, h - 39, bldg.position.z);
+                    cityGroup.add(beacon);
+                }
+            }
+            scene.add(cityGroup);
+        }
+
+        function createPillar(x, z, h = 4.5) {
+            const pillar = new THREE.Mesh(new THREE.BoxGeometry(1.2, h, 1.2), new THREE.MeshLambertMaterial({ color: 0x162330 }));
+            pillar.position.set(x, h / 2, z);
+            scene.add(pillar);
+            floorColliders.push(pillar);
+        }
+
+        function createMissionTarget(index, data) {
+            if (index === 1) {
+                // In Floor 2, target is the executive guard himself
+                missionTargetMesh = null;
+                return;
+            }
+
+            if (index === 0) {
+                // Classified Security Folder
+                const docGeo = new THREE.BoxGeometry(0.8, 0.05, 0.6);
+                const docMat = new THREE.MeshBasicMaterial({ color: 0xf5ecc6 });
+                missionTargetMesh = new THREE.Mesh(docGeo, docMat);
+                missionTargetMesh.position.copy(data.targetPos);
+                scene.add(missionTargetMesh);
+
+                // Glowing pulsing marker
+                const targetMarker = new THREE.Mesh(new THREE.RingGeometry(0.5, 0.6, 8), new THREE.MeshBasicMaterial({ color: 0x1ef0ab, side: THREE.DoubleSide }));
+                targetMarker.rotation.x = -Math.PI / 2;
+                targetMarker.position.set(0, 1.25, -6);
+                scene.add(targetMarker);
+            } else if (index === 2) {
+                // Cybernetic Schematics blueprint tube & datapad
+                const schemGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.9, 6);
+                schemGeo.rotateZ(Math.PI / 2);
+                const schemMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff });
+                missionTargetMesh = new THREE.Mesh(schemGeo, schemMat);
+                missionTargetMesh.position.copy(data.targetPos);
+                scene.add(missionTargetMesh);
+            } else if (index === 3) {
+                // Master AI Core drive
+                const coreGeo = new THREE.OctahedronGeometry(0.45);
+                const coreMat = new THREE.MeshBasicMaterial({ color: 0xffaa00, wireframe: true });
+                missionTargetMesh = new THREE.Mesh(coreGeo, coreMat);
+                missionTargetMesh.position.copy(data.targetPos);
+                scene.add(missionTargetMesh);
+            } else if (index === 4) {
+                // Rooftop Jump Gate target zone
+                const jumpGateGeo = new THREE.BoxGeometry(5, 3, 0.2);
+                const jumpGateMat = new THREE.MeshBasicMaterial({ color: 0x1ef0ab, transparent: true, opacity: 0.3 });
+                missionTargetMesh = new THREE.Mesh(jumpGateGeo, jumpGateMat);
+                missionTargetMesh.position.copy(data.targetPos);
+                scene.add(missionTargetMesh);
+            }
+        }
+
+        function createGuard(index, data) {
+            const guardGroup = new THREE.Group();
+
+            // Low poly retro robot guard
+            const armorMat = new THREE.MeshLambertMaterial({ color: (index === 3) ? 0x6e1b1b : 0x2c3b4a, flatShading: true });
+            const visorMat = new THREE.MeshBasicMaterial({ color: 0xff2244 });
+
+            // Torso
+            const torso = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.0, 0.5), armorMat);
+            torso.position.y = 1.3;
+            guardGroup.add(torso);
+
+            // Head & Glowing Red Visor
+            const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.45, 0.4), armorMat);
+            head.position.y = 2.05;
+            const visor = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.12, 0.1), visorMat);
+            visor.position.set(0, 2.05, -0.22);
+            guardGroup.add(head, visor);
+
+            // Legs
+            const legLeft = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.8, 0.24), armorMat);
+            legLeft.position.set(-0.24, 0.4, 0);
+            const legRight = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.8, 0.24), armorMat);
+            legRight.position.set(0.24, 0.4, 0);
+            guardGroup.add(legLeft, legRight);
+
+            // Flashlight / Vision cone spotlight
+            const spotLight = new THREE.SpotLight(0xff3b30, 2.5, 14, Math.PI / 5, 0.4, 1.5);
+            spotLight.position.set(0, 1.9, -0.3);
+            const spotTarget = new THREE.Object3D();
+            spotTarget.position.set(0, 0.5, -6);
+            guardGroup.add(spotTarget);
+            spotLight.target = spotTarget;
+            guardGroup.add(spotLight);
+
+            guardGroup.position.copy(data.guardStart);
+            scene.add(guardGroup);
+
+            currentGuard = {
+                mesh: guardGroup,
+                patrolPoints: data.guardPatrol,
+                currentPointIndex: 0,
+                speed: 2.2,
+                knockedOut: false,
+                knockoutTimer: 0,
+                visorMesh: visor,
+                spotLight: spotLight
+            };
+        }
+
+        function setupInputs() {
+            const canvas = document.getElementById('webgl-canvas');
+
+            document.getElementById('btn-start').addEventListener('click', () => {
+                document.getElementById('start-screen').classList.add('hidden');
+                audio.init();
+                canvas.requestPointerLock();
+                isGameStarted = true;
+            });
+
+            document.getElementById('btn-restart').addEventListener('click', () => {
+                document.getElementById('victory-screen').classList.add('hidden');
+                document.getElementById('parachute-hud').style.display = 'none';
+                document.getElementById('hud').style.display = 'flex';
+                isBaseJumping = false;
+                loadFloor(0);
+                canvas.requestPointerLock();
+            });
+
+            canvas.addEventListener('click', () => {
+                if (isGameStarted && !mouseLookActive) {
+                    canvas.requestPointerLock();
+                }
+            });
+
+            document.addEventListener('pointerlockchange', () => {
+                mouseLookActive = (document.pointerLockElement === canvas);
+            });
+
+            window.addEventListener('keydown', (e) => {
+                switch(e.code) {
+                    case 'KeyW': keys.w = true; break;
+                    case 'KeyS': keys.s = true; break;
+                    case 'KeyA': keys.a = true; break;
+                    case 'KeyD': keys.d = true; break;
+                    case 'Space': keys.space = true; break;
+                    case 'ShiftLeft':
+                    case 'ShiftRight': keys.shift = true; break;
+                    case 'Digit1': selectWeapon(0); break;
+                    case 'Digit2': selectWeapon(1); break;
+                    case 'Digit3': selectWeapon(2); break;
+                    case 'KeyE': handleInteract(); break;
+                }
+            });
+
+            window.addEventListener('keyup', (e) => {
+                switch(e.code) {
+                    case 'KeyW': keys.w = false; break;
+                    case 'KeyS': keys.s = false; break;
+                    case 'KeyA': keys.a = false; break;
+                    case 'KeyD': keys.d = false; break;
+                    case 'Space': keys.space = false; break;
+                    case 'ShiftLeft':
+                    case 'ShiftRight': keys.shift = false; break;
+                }
+            });
+
+            window.addEventListener('mousemove', (e) => {
+                if (!mouseLookActive) return;
+                const sensitivity = 0.0022;
+                player.yaw -= e.movementX * sensitivity;
+                player.pitch -= e.movementY * sensitivity;
+                player.pitch = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, player.pitch));
+
+                camera.rotation.y = player.yaw;
+                camera.rotation.x = player.pitch;
+            });
+
+            window.addEventListener('mousedown', (e) => {
+                if (!mouseLookActive || !isGameStarted) return;
+                if (e.button === 0) {
+                    // Left Click: Use active tool
+                    triggerActiveTool();
+                } else if (e.button === 2) {
+                    // Right Click: Zoom camera
+                    if (activeWeapon === 0) {
+                        camera.fov = 35;
+                        camera.updateProjectionMatrix();
+                    }
+                }
+            });
+
+            window.addEventListener('mouseup', (e) => {
+                if (e.button === 2) {
+                    camera.fov = 72;
+                    camera.updateProjectionMatrix();
+                }
+            });
+
+            window.addEventListener('wheel', (e) => {
+                if (e.deltaY > 0) {
+                    selectWeapon((activeWeapon + 1) % 3);
+                } else if (e.deltaY < 0) {
+                    selectWeapon((activeWeapon + 2) % 3);
+                }
+            });
+
+            window.addEventListener('contextmenu', e => e.preventDefault());
+        }
+
+        function selectWeapon(index) {
+            activeWeapon = index;
+            document.querySelectorAll('.tool-slot').forEach((slot, i) => {
+                slot.classList.toggle('active', i === index);
+            });
+
+            // Toggle camera HUD viewfinder
+            document.getElementById('camera-frame').style.display = (index === 0) ? 'block' : 'none';
+
+            // Toggle grapple targeting indicator HUD
+            const grappleUI = document.getElementById('grapple-target-indicator');
+            if (grappleUI) {
+                grappleUI.style.display = (index === 1) ? 'flex' : 'none';
+            }
+
+            // Switch viewmodel 3D mesh visibility
+            if (viewmodelArm) {
+                viewmodelArm.getObjectByName('tool_cam').visible = (index === 0);
+                viewmodelArm.getObjectByName('tool_grapple').visible = (index === 1);
+                viewmodelArm.getObjectByName('tool_pistol').visible = (index === 2);
+            }
+        }
+
+        function triggerActiveTool() {
+            if (activeWeapon === 0) {
+                // CYBER-CAMERA SNAP
+                takePhotograph();
+            } else if (activeWeapon === 1) {
+                // CROSSBOW GRAPPLE HOOK
+                fireGrappleHook();
+            } else if (activeWeapon === 2) {
+                // GAS PELLET GUN
+                fireGasPellet();
+            }
+        }
+
+        function takePhotograph() {
+            audio.playShutter();
+
+            // Camera Flash UI effect
+            const flash = document.getElementById('photo-flash');
+            flash.style.opacity = '1';
+            setTimeout(() => { flash.style.opacity = '0'; }, 60);
+
+            // Raycast check from camera center
+            const raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+
+            let photoSuccess = false;
+            let targetObj = missionTargetMesh;
+
+            // On Floor 2, the mission target is the guard himself
+            if (currentFloorIndex === 1 && currentGuard && currentGuard.mesh) {
+                targetObj = currentGuard.mesh.children[0]; // guard torso
+            }
+
+            if (targetObj) {
+                const hits = raycaster.intersectObject(targetObj, true);
+                if (hits.length > 0 && hits[0].distance < 18) {
+                    photoSuccess = true;
+                }
+            }
+
+            if (photoSuccess && !objectiveCompleted) {
+                objectiveCompleted = true;
+                audio.playElevatorDing();
+
+                const tag = document.getElementById('objective-tag');
+                tag.innerText = "STATUS: PHOTO VALIDATED ✓";
+                tag.className = "objective-status done";
+
+                if (currentFloorIndex < 4) {
+                    document.getElementById('exit-status').innerText = "ELEVATOR CLEARED [E]";
+                    document.getElementById('exit-status').style.color = "#1ef0ab";
+                    if (elevatorDoorMesh) {
+                        elevatorDoorMesh.material.color.setHex(0x00ff88);
+                    }
+                    showNotification("INTELLIGENCE SECURED", "High-res optical photo verified. Elevator unlocked.");
+                } else {
+                    document.getElementById('exit-status').innerText = "READY FOR BASE JUMP";
+                    showNotification("FINAL OBJECTIVE COMPLETE", "Rooftop perimeter clear. Initiate BASE JUMP!");
+                }
+            } else if (!photoSuccess && !objectiveCompleted) {
+                showNotification("SCAN MISSED", "Aim squarely at the classified target and re-take photo.");
+            }
+        }
+
+        function fireGrappleHook() {
+            if (player.grappling) {
+                // Release grapple if already hooked
+                player.grappling = false;
+                player.grapplePoint = null;
+                if (grappleLine) grappleLine.visible = false;
+                document.getElementById('grapple-status').innerText = "READY";
+                return;
+            }
+
+            audio.playGrappleFire();
+
+            const raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+
+            // Extended grapple range of 45m
+            const intersects = raycaster.intersectObjects(floorColliders, true);
+            if (intersects.length > 0 && intersects[0].distance < 45) {
+                const hit = intersects[0];
+                player.grappling = true;
+
+                // If hit dedicated anchor, target safe landing coordinate
+                if (hit.object.isGrappleAnchor && hit.object.grappleLanding) {
+                    player.grapplePoint = hit.object.grappleLanding.clone();
+                } else {
+                    // Slight upward bias for smooth ledge hoisting
+                    player.grapplePoint = hit.point.clone().add(new THREE.Vector3(0, 0.4, 0));
+                }
+
+                if (grappleLine) {
+                    grappleLine.visible = true;
+                }
+
+                audio.playGrappleReel();
+                document.getElementById('grapple-status').innerText = "ASCENDING...";
+                showNotification("GRAPPLE HOOKED", "Reeling up to elevated structure!");
+            } else {
+                showNotification("OUT OF RANGE", "Aim at grapple anchors, catwalk railings, or upper structures (<45m).");
+            }
+        }
+
+        function fireGasPellet() {
+            if (gasPellets <= 0) {
+                showNotification("EMPTY MAGAZINE", "No gas pellets remaining.");
+                return;
+            }
+
+            gasPellets--;
+            document.getElementById('gas-ammo-display').innerText = `PELLETS: ${gasPellets}`;
+            audio.playPelletFire();
+
+            // Spawn projectile
+            const pelletGeo = new THREE.SphereGeometry(0.12, 6, 6);
+            const pelletMat = new THREE.MeshBasicMaterial({ color: 0x4eff6a });
+            const pelletMesh = new THREE.Mesh(pelletGeo, pelletMat);
+
+            pelletMesh.position.copy(player.pos);
+            const dir = new THREE.Vector3();
+            camera.getWorldDirection(dir);
+            pelletMesh.position.addScaledVector(dir, 0.6);
+
+            const velocity = dir.clone().multiplyScalar(22);
+            gasProjectiles.push({
+                mesh: pelletMesh,
+                vel: velocity,
+                life: 3.0
+            });
+            scene.add(pelletMesh);
+        }
+
+        function createGasCloud(pos) {
+            audio.playGasExplosion();
+
+            for (let i = 0; i < 16; i++) {
+                const p = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.35, 0.35, 0.35),
+                    new THREE.MeshBasicMaterial({ color: 0x2ef07a, transparent: true, opacity: 0.65 })
+                );
+                p.position.copy(pos);
+                const vel = new THREE.Vector3(
+                    (Math.random() - 0.5) * 4,
+                    Math.random() * 2 + 0.5,
+                    (Math.random() - 0.5) * 4
+                );
+                smokeParticles.push({ mesh: p, vel: vel, life: 2.2, maxLife: 2.2 });
+                scene.add(p);
+            }
+
+            // Check if guard caught in gas explosion cloud
+            if (currentGuard && !currentGuard.knockedOut) {
+                const dist = pos.distanceTo(currentGuard.mesh.position);
+                if (dist < 4.5) {
+                    knockoutGuard(30); // 30 seconds knockout requirement!
+                }
+            }
+        }
+
+        function knockoutGuard(seconds) {
+            if (!currentGuard) return;
+            currentGuard.knockedOut = true;
+            currentGuard.knockoutTimer = seconds;
+            currentGuard.visorMesh.material.color.setHex(0x334455); // Visor offline
+            currentGuard.spotLight.intensity = 0.2;
+            currentGuard.mesh.rotation.x = Math.PI / 2; // Tumble to ground
+            currentGuard.mesh.position.y = 0.3;
+
+            document.getElementById('guard-status-display').innerText = `GUARD: STUNNED (${Math.ceil(seconds)}s)`;
+            document.getElementById('guard-status-display').style.borderColor = '#ffb700';
+            document.getElementById('guard-status-display').style.color = '#ffb700';
+
+            showNotification("GUARD KNOCKED OUT", "Tranquilizer gas effective! Guard disabled for 30s.");
+        }
+
+        function handleInteract() {
+            if (currentFloorIndex < 4) {
+                // Elevator interaction
+                const dist = player.pos.distanceTo(FLOOR_DATA[currentFloorIndex].elevatorPos);
+                if (dist < 3.8) {
+                    if (objectiveCompleted) {
+                        loadFloor(currentFloorIndex + 1);
+                    } else {
+                        showNotification("ELEVATOR LOCKED", "Fulfill mission photo objective before proceeding!");
+                    }
+                }
+            } else if (currentFloorIndex === 4 && objectiveCompleted) {
+                // Initiate Parachute Jump Finale
+                triggerParachuteJump();
+            }
+        }
+
+        function triggerParachuteJump() {
+            if (isBaseJumping) return;
+            isBaseJumping = true;
+            altitude = 380;
+
+            document.getElementById('hud').style.display = 'none';
+            document.getElementById('camera-frame').style.display = 'none';
+            document.getElementById('crosshair').style.display = 'none';
+            document.getElementById('parachute-hud').style.display = 'flex';
+
+            // Launch player forward off rooftop ledge
+            player.pos.set(0, 10, -28);
+            player.vel.set(0, -2, -18);
+            audio.playAmbience();
+            showNotification("PARACHUTE DEPLOYED", "BASE Jump underway. Descending to city exfiltration dropzone!");
+        }
+
+        function updateGuards(delta) {
+            if (!currentGuard) return;
+
+            if (currentGuard.knockedOut) {
+                currentGuard.knockoutTimer -= delta;
+                document.getElementById('guard-status-display').innerText = `GUARD: STUNNED (${Math.max(0, Math.ceil(currentGuard.knockoutTimer))}s)`;
+                if (currentGuard.knockoutTimer <= 0) {
+                    // Revive guard
+                    currentGuard.knockedOut = false;
+                    currentGuard.mesh.rotation.x = 0;
+                    currentGuard.mesh.position.y = 0;
+                    currentGuard.visorMesh.material.color.setHex(0xff2244);
+                    currentGuard.spotLight.intensity = 2.5;
+                    document.getElementById('guard-status-display').innerText = "GUARD: ACTIVE PATROL";
+                    document.getElementById('guard-status-display').style.borderColor = '#3b9ac4';
+                    document.getElementById('guard-status-display').style.color = '#72dbff';
+                    showNotification("WARNING", "Guard has regained consciousness!");
+                }
+                return;
+            }
+
+            // Patrol path traversal
+            const pts = currentGuard.patrolPoints;
+            const target = pts[currentGuard.currentPointIndex];
+            const toTarget = new THREE.Vector3().subVectors(target, currentGuard.mesh.position);
+            toTarget.y = 0;
+            const dist = toTarget.length();
+
+            if (dist < 0.5) {
+                currentGuard.currentPointIndex = (currentGuard.currentPointIndex + 1) % pts.length;
+            } else {
+                toTarget.normalize();
+                currentGuard.mesh.position.addScaledVector(toTarget, currentGuard.speed * delta);
+                // Rotate towards movement direction
+                const lookAngle = Math.atan2(toTarget.x, toTarget.z) + Math.PI;
+                currentGuard.mesh.rotation.y = lookAngle;
+            }
+
+            // Vision Detection Cone
+            const guardPos = currentGuard.mesh.position.clone().add(new THREE.Vector3(0, 1.8, 0));
+            const toPlayer = new THREE.Vector3().subVectors(player.pos, guardPos);
+            const distToPlayer = toPlayer.length();
+
+            if (distToPlayer < 14) {
+                const forward = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), currentGuard.mesh.rotation.y);
+                const angle = forward.angleTo(toPlayer.clone().normalize());
+
+                if (angle < Math.PI / 4) { // 45 degree vision cone
+                    alertLevel = Math.min(100, alertLevel + delta * 55);
+                } else if (distToPlayer < 4) {
+                    alertLevel = Math.min(100, alertLevel + delta * 40); // Close proximity awareness
+                } else {
+                    alertLevel = Math.max(0, alertLevel - delta * 15);
+                }
+            } else {
+                alertLevel = Math.max(0, alertLevel - delta * 20);
+            }
+
+            updateAlertUI();
+        }
+
+        function updateAlertUI() {
+            const fill = document.getElementById('alert-fill');
+            const txt = document.getElementById('alert-text');
+            fill.style.width = `${alertLevel}%`;
+
+            if (alertLevel > 80) {
+                fill.style.backgroundColor = '#ff2244';
+                txt.innerText = "CRITICAL ALERT: INTRUDER SPOTTED";
+                txt.style.color = '#ff2244';
+            } else if (alertLevel > 35) {
+                fill.style.backgroundColor = '#ffaa00';
+                txt.innerText = "SUSPICIOUS ACTIVITY";
+                txt.style.color = '#ffaa00';
+            } else {
+                fill.style.backgroundColor = '#1ef0ab';
+                txt.innerText = "UNDETECTED";
+                txt.style.color = '#1ef0ab';
+            }
+        }
+
+        function updatePhysics(delta) {
+            if (isBaseJumping) {
+                // Parachute descent simulation
+                altitude -= delta * 34;
+                player.pos.y -= delta * 14;
+                player.pos.z -= delta * 18;
+                camera.position.copy(player.pos);
+
+                document.getElementById('altimeter-val').innerText = `ALT: ${Math.max(0, Math.floor(altitude))} M`;
+
+                if (altitude <= 0) {
+                    // Trigger Victory Screen!
+                    isBaseJumping = false;
+                    document.exitPointerLock();
+                    document.getElementById('parachute-hud').style.display = 'none';
+                    document.getElementById('victory-screen').classList.remove('hidden');
+                }
+                return;
+            }
+
+            // Grapple HUD targeting reticle calculation when Crossbow is selected
+            if (activeWeapon === 1) {
+                const raycaster = new THREE.Raycaster();
+                raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+                const hits = raycaster.intersectObjects(floorColliders, true);
+                const grappleUI = document.getElementById('grapple-target-indicator');
+                const distText = document.getElementById('grapple-dist-readout');
+
+                if (hits.length > 0 && hits[0].distance < 45) {
+                    const hit = hits[0];
+                    grappleUI.classList.add('locked');
+                    const d = Math.round(hit.distance);
+                    const isAnchor = !!hit.object.isGrappleAnchor;
+                    distText.innerText = isAnchor ? `[ANCHOR LOCKED: ${d}m]` : `[SURFACE: ${d}m]`;
+                    distText.style.color = isAnchor ? '#00ffcc' : '#00ff88';
+                } else {
+                    grappleUI.classList.remove('locked');
+                    distText.innerText = "[NO ANCHOR IN RANGE]";
+                    distText.style.color = '#ff6666';
+                }
+            }
+
+            // Grapple pull physics
+            if (player.grappling && player.grapplePoint) {
+                const grappleDir = new THREE.Vector3().subVectors(player.grapplePoint, player.pos);
+                const dist = grappleDir.length();
+
+                // Update visual cable line
+                if (grappleLine) {
+                    const positions = grappleLine.geometry.attributes.position.array;
+                    // Start from player weapon tip
+                    positions[0] = player.pos.x + 0.2;
+                    positions[1] = player.pos.y - 0.2;
+                    positions[2] = player.pos.z - 0.4;
+                    // End at target point
+                    positions[3] = player.grapplePoint.x;
+                    positions[4] = player.grapplePoint.y;
+                    positions[5] = player.grapplePoint.z;
+                    grappleLine.geometry.attributes.position.needsUpdate = true;
+                }
+
+                if (dist > 1.8) {
+                    grappleDir.normalize();
+                    // High responsive pull speed
+                    player.vel.addScaledVector(grappleDir, 42 * delta);
+                    player.vel.multiplyScalar(0.93);
+                    player.pos.addScaledVector(player.vel, delta);
+                } else {
+                    // Apex reached: apply gentle forward-upward hop to pop onto platform
+                    player.grappling = false;
+                    if (grappleLine) grappleLine.visible = false;
+                    player.vel.set(0, 3.2, -3.5);
+                    player.pos.y = Math.max(player.pos.y, player.grapplePoint.y + 0.3);
+                    document.getElementById('grapple-status').innerText = "READY";
+                    showNotification("ELEVATED DECK REACHED", "Grapple released. You are on the catwalk!");
+                }
+            } else {
+                if (grappleLine && grappleLine.visible) {
+                    grappleLine.visible = false;
+                }
+
+                // Standard FPS Walk / Run / Jump movement
+                const moveVector = new THREE.Vector3();
+                if (keys.w) moveVector.z -= 1;
+                if (keys.s) moveVector.z += 1;
+                if (keys.a) moveVector.x -= 1;
+                if (keys.d) moveVector.x += 1;
+
+                if (moveVector.lengthSq() > 0) {
+                    moveVector.normalize();
+                    const currentSpeed = keys.shift ? (player.speed * player.sprintMultiplier) : player.speed;
+                    moveVector.applyAxisAngle(new THREE.Vector3(0, 1, 0), player.yaw);
+
+                    player.pos.x += moveVector.x * currentSpeed * delta;
+                    player.pos.z += moveVector.z * currentSpeed * delta;
+                }
+
+                // Gravity and vertical jump
+                if (keys.space && player.onGround) {
+                    player.vel.y = 6.4;
+                    player.onGround = false;
+                }
+
+                player.vel.y -= 18.0 * delta; // Gravity
+                player.pos.y += player.vel.y * delta;
+
+                // Ground plane floor collision
+                if (player.pos.y <= player.height) {
+                    player.pos.y = player.height;
+                    player.vel.y = 0;
+                    player.onGround = true;
+                }
+
+                // Check Catwalk standing on Floor 3
+                if (currentFloorIndex === 2) {
+                    // Main catwalk deck surface collision
+                    if (Math.abs(player.pos.z - (-9)) < 3.8 && Math.abs(player.pos.x) < 11.5) {
+                        if (player.pos.y <= 6.8 && player.pos.y >= 4.8) {
+                            player.pos.y = 6.8;
+                            player.vel.y = 0;
+                            player.onGround = true;
+                        }
+                    }
+
+                    // Stepped crates / parkour collision checks
+                    if (Math.abs(player.pos.x - (-10)) < 1.6) {
+                        if (Math.abs(player.pos.z - 2) < 1.6 && player.pos.y <= 3.2 && player.pos.y >= 1.5) {
+                            player.pos.y = 3.2; player.vel.y = 0; player.onGround = true;
+                        } else if (Math.abs(player.pos.z - (-2)) < 1.6 && player.pos.y <= 4.7 && player.pos.y >= 3.0) {
+                            player.pos.y = 4.7; player.vel.y = 0; player.onGround = true;
+                        } else if (Math.abs(player.pos.z - (-6)) < 1.6 && player.pos.y <= 6.1 && player.pos.y >= 4.4) {
+                            player.pos.y = 6.1; player.vel.y = 0; player.onGround = true;
+                        }
+                    }
+                }
+
+                // Perimeter boundary collision
+                player.pos.x = Math.max(-12, Math.min(12, player.pos.x));
+                player.pos.z = Math.max(-24, Math.min(15.5, player.pos.z));
+            }
+
+            camera.position.copy(player.pos);
+
+            // Proximity interact prompt
+            const prompt = document.getElementById('interact-prompt');
+            if (currentFloorIndex < 4) {
+                const distToElev = player.pos.distanceTo(FLOOR_DATA[currentFloorIndex].elevatorPos);
+                if (distToElev < 3.8) {
+                    prompt.style.display = 'block';
+                    prompt.innerText = objectiveCompleted ? "[E] ACTIVATE ELEVATOR ASCENT" : "[LOCKED] PHOTOGRAPH TARGET FIRST";
+                } else {
+                    prompt.style.display = 'none';
+                }
+            } else {
+                // Rooftop jump ramp prompt
+                if (player.pos.z < -14 && !isBaseJumping) {
+                    prompt.style.display = 'block';
+                    prompt.innerText = "[SPACE / SPRINT] LEAP OFF ROOFTOP RUNWAY TO ESCAPE";
+                    if (player.pos.z < -20) {
+                        triggerParachuteJump();
+                    }
+                } else {
+                    prompt.style.display = 'none';
+                }
+            }
+
+            // Update Gas Bomb Projectiles
+            for (let i = gasProjectiles.length - 1; i >= 0; i--) {
+                const p = gasProjectiles[i];
+                p.vel.y -= 9.8 * delta; // Projectile arc
+                p.mesh.position.addScaledVector(p.vel, delta);
+                p.life -= delta;
+
+                // Impact with floor or props
+                if (p.mesh.position.y <= 0.1 || p.life <= 0) {
+                    createGasCloud(p.mesh.position);
+                    scene.remove(p.mesh);
+                    gasProjectiles.splice(i, 1);
+                }
+            }
+
+            // Update Gas Smoke Particles
+            for (let i = smokeParticles.length - 1; i >= 0; i--) {
+                const sp = smokeParticles[i];
+                sp.life -= delta;
+                sp.mesh.position.addScaledVector(sp.vel, delta);
+                sp.mesh.scale.multiplyScalar(1.02);
+                sp.mesh.material.opacity = (sp.life / sp.maxLife) * 0.65;
+                if (sp.life <= 0) {
+                    scene.remove(sp.mesh);
+                    smokeParticles.splice(i, 1);
+                }
+            }
+
+            // Viewmodel weapon idle sway
+            if (viewmodelArm) {
+                const swayX = Math.sin(Date.now() * 0.003) * 0.005;
+                const swayY = Math.cos(Date.now() * 0.006) * 0.005;
+                viewmodelArm.position.set(swayX, swayY, 0);
+            }
+        }
+
+        let notificationTimeout = null;
+        function showNotification(title, text) {
+            const box = document.getElementById('notification-box');
+            document.getElementById('notification-title').innerText = title;
+            document.getElementById('notification-desc').innerText = text;
+            box.classList.add('visible');
+
+            if (notificationTimeout) clearTimeout(notificationTimeout);
+            notificationTimeout = setTimeout(() => {
+                box.classList.remove('visible');
+            }, 3400);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        let lastTime = performance.now();
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const now = performance.now();
+            const delta = Math.min((now - lastTime) / 1000, 0.1);
+            lastTime = now;
+
+            if (isGameStarted) {
+                updatePhysics(delta);
+                updateGuards(delta);
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        window.onload = function () {
+            initEngine();
+            animate();
+        };
+    </script>
 </body>
 </html>
