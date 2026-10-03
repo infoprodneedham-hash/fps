@@ -5,27 +5,17 @@ const ctx = canvas.getContext('2d');
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
-// Main player AI robot
-class PlayerAI {
-    constructor(x, y, size, color) {
-        this.x = x;
-        this.y = y;
-        this.size = size;
-        this.color = color;
-        this.speed = 5; // Speed for moving around
-    }
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    draw() {
-        ctx.fillStyle = this.color;
-        ctx.fillRect(this.x - this.size / 2, this.y - this.size / 2, this.size, this.size);
-    }
+    // Draw player robot (replace with actual AI logic)
+    const playerX = canvas.width / 2 - 50; // Adjust size as needed
+    const playerY = canvas.height - 70;     // Adjust size as needed
+
+    ctx.fillStyle = 'red';
+    ctx.fillRect(playerX, playerY, 50, 50); // Size of the player robot
+
+    requestAnimationFrame(draw);
 }
 
-// Example enemies (you can add more types and randomize them later)
-const EnemyAI = () => new Promise((resolve) => {
-    setTimeout(() => resolve(), Math.random() * 1000 + 100); // Random delay
-});
-
-EnemyAI().then(() => {
-    // Place an enemy at a random position on the screen
-});
+draw();
